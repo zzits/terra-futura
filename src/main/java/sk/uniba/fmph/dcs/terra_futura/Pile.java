@@ -10,6 +10,11 @@ public class Pile {
     private final List<Card> display = new ArrayList<>();
     private final Deque<Card> deck = new ArrayDeque<>();
 
+    public Pile(ArrayList<Card> cardsForDisplay, ArrayList<Card> cardsForDeck) {
+        display.addAll(cardsForDisplay);
+        deck.addAll(cardsForDeck);
+    }
+
     public Optional<Card> getCard(int index) {
         if (index < 0 || index >= display.size()) return Optional.empty();
         return Optional.of(display.get(index));
