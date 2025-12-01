@@ -1,6 +1,13 @@
 package sk.uniba.fmph.dcs.terra_futura;
 
-public class Points {
-    public int value;
-}
+public final class Points {
+    private final int value;
 
+    public Points(final int value) {
+        this.value = value;
+    }
+
+    public int value() {
+        return value;
+    }
+}

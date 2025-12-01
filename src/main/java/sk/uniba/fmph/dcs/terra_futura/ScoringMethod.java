@@ -1,75 +1,88 @@
 package sk.uniba.fmph.dcs.terra_futura;
 
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Supplier;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/**
- * One way to count bonus points for a scoring card.
- * This class does not know where resources come from.
- * They are obtained from the grid via resourceProvider.
- **/
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Supplier;
+
 public final class ScoringMethod {
+    public List<Resource> resources;
 
-    private final List<Resource> resources;
-    private final Points pointsPerCombination;
+    public Points pointsPerCombination;
+    public Optional<Points> calculatedTotal;
+
+    // provides current resource counts from the game
     private final Supplier<Map<Resource, Integer>> resourceProvider;
-
-    // null until chosen
-    private Points calculatedTotal;
 
     public ScoringMethod(final List<Resource> resources,
                          final Points pointsPerCombination,
                          final Supplier<Map<Resource, Integer>> resourceProvider) {
+        if (resources == null || pointsPerCombination == null || resourceProvider == null) {
+            throw new IllegalArgumentException("Arguments must be non-null");
+        }
+
         this.resources = List.copyOf(resources);
         this.pointsPerCombination = pointsPerCombination;
         this.resourceProvider = resourceProvider;
+        this.calculatedTotal = Optional.empty();
     }
 
+    // compute total points from available resources
     public void selectThisMethodAndCalculate() {
-        Map<Resource, Integer> available =
-                new EnumMap<>(resourceProvider.get());
+        final Map<Resource, Integer> provided = resourceProvider.get();
 
-        // Count how many full multisets "resources" we can form.
-        int combinations = Integer.MAX_VALUE;
-        for (Resource r : Resource.values()) {
-            long inPattern = resources.stream().filter(x -> x == r).count();
-            if (inPattern == 0) {
-                continue;
-            }
-            int availableCount = available.getOrDefault(r, 0);
-            int fromThis = availableCount / (int) inPattern;
-            combinations = Math.min(combinations, fromThis);
+        final EnumMap<Resource, Integer> available =
+                new EnumMap<>(Resource.class);
+        if (provided != null) {
+            available.putAll(provided);
         }
-        if (combinations == Integer.MAX_VALUE) {
-            combinations = 0;
-        }
-        calculatedTotal = new Points(combinations * pointsPerCombination.value());
-    }
 
-    public Points pointsPerCombination() {
-        return pointsPerCombination;
-    }
-
-    public Points calculatedTotal() {
-        return calculatedTotal;
-    }
-
-    public String state() {
-        JSONObject json = new JSONObject();
-        JSONArray pattern = new JSONArray();
+        // how many of each resource is needed for one combo
+        final EnumMap<Resource, Integer> needed =
+                new EnumMap<>(Resource.class);
         for (Resource r : resources) {
-            pattern.put(r.name());
+            needed.merge(r, 1, Integer::sum);
         }
-        json.put("resources", pattern);
+
+        int combinations = 0;
+
+        if (!needed.isEmpty()) {
+            combinations = Integer.MAX_VALUE;
+
+            for (Map.Entry<Resource, Integer> e : needed.entrySet()) {
+                final Resource r = e.getKey();
+                final int need = e.getValue();
+                final int have = available.getOrDefault(r, 0);
+                final int fromThis = have / need;
+                combinations = Math.min(combinations, fromThis);
+            }
+        }
+
+        final Points total =
+                new Points(combinations * pointsPerCombination.value());
+
+        this.calculatedTotal = Optional.of(total);
+    }
+
+    // JSON view for UI / debugging
+    public String state() {
+        final JSONObject json = new JSONObject();
+
+        final JSONArray patternArr = new JSONArray();
+        for (Resource r : resources) {
+            patternArr.put(r.name());
+        }
+        json.put("resources", patternArr);
+
         json.put("pointsPerCombination", pointsPerCombination.value());
-        json.put("selected", calculatedTotal != null);
+        json.put("selected", calculatedTotal.isPresent());
         json.put("total",
-                calculatedTotal == null ? 0 : calculatedTotal.value());
+                calculatedTotal.map(Points::value).orElse(0));
+
         return json.toString();
     }
 }
